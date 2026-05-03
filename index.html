@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Harmonic Bars – Structured</title>
+
+<style>
+/* =========================================================
+   BASE / LAYOUT
+========================================================= */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #000;
+  color: #fff;
+  font-family: Arial, sans-serif;
+}
+
+/* =========================================================
+   BARS UI
+========================================================= */
+#bars {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+}
+
+.track {
+  position: relative;
+  width: calc(100% - 16px);
+  height: 100%;
+  margin: 0 8px;
+}
+
+.bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: #fff;
+}
+
+/* =========================================================
+   INFO GRID UI
+========================================================= */
+#infoGrid {
+  position: fixed;
+  bottom: 8px;
+  right: 8px;
+  display: grid;
+  grid-template-columns: repeat(6, auto);
+  grid-template-rows: repeat(9, auto);
+  gap: 4px 12px;
+  font-size: 11px;
+  background: rgba(0,0,0,0.6);
+  padding: 6px 8px;
+  border: 1px solid #444;
+}
+
+.label, .value {
+  border: 2px solid #fff;
+  padding: 4px 6px;
+  box-sizing: border-box;
+}
+
+.label { opacity: 0.8; }
+.value { font-weight: bold; }
+</style>
+</head>
+
+<body>
+
+<button id="start">Start Audio</button>
+
+<!-- =========================================================
+     UI: INFO GRID
+========================================================= -->
+<div id="infoGrid">
+  <!-- (igual que tu código original, omitido por brevedad) -->
+</div>
+
+<!-- =========================================================
+     UI: BARS CONTAINER
+========================================================= -->
+<div id="bars"></div>
+
+<script>
+
+/* =========================================================
+   STATE (datos globales)
+========================================================= */
+let audioContext;
+let masterGain;
+
+const FUNDAMENTAL = 32.703;
+
+const gains = [];
+const bars = [];
+
+const activeByGroup = Array.from({ length: 8 }, () => new Set());
+const soundingByGroup = Array.from({ length: 8 }, () => new Set());
+const activatedByGroup = Array(8).fill(0);
+
+
+/* =========================================================
+   MODEL (grupos + combinaciones)
+========================================================= */
+let cursor = 1;
+const groups = [];
+
+for (let i = 0; i < 8; i++) {
+  const size = 2 ** i;
+  groups.push({
+    index: i,
+    indices: Array.from({ length: size }, (_, k) => cursor + k)
+  });
+  cursor += size;
+}
+
+const combinations = [];
+
+for (let mask = 1; mask < 256; mask++) {
+  const combo = [];
+  for (let i = 0; i < 8; i++) {
+    if (mask & (1 << i)) combo.push(i);
+  }
+  combinations.push(combo);
+}
+
+
+/* =========================================================
+   AUDIO ENGINE
+========================================================= */
+function initAudio() {
+  audioContext = new AudioContext();
+  audioContext.resume();
+
+  masterGain = audioContext.createGain();
+  masterGain.gain.value = 0.25;
+  masterGain.connect(audioContext.destination);
+}
+
+function createOscillators() {
+  const container = document.getElementById("bars");
+
+  const groupContainers = [];
+  for (let g = 0; g < 8; g++) {
+    const group = document.createElement("div");
+    group.style.height = "12.5vh";
+    group.style.display = "flex";
+    group.style.flexDirection = "column";
+    container.appendChild(group);
+    groupContainers.push(group);
+  }
+
+  for (let n = 1; n <= 255; n++) {
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const g = Math.floor(Math.log2(n));
+
+    osc.type = "sine";
+    osc.frequency.value = FUNDAMENTAL * n;
+    gain.gain.value = 0;
+
+    osc.connect(gain);
+    gain.connect(masterGain);
+    osc.start();
+
+    gains[n] = gain;
+
+    const row = document.createElement("div");
+    row.className = "row";
+    row.style.height = `${100 / (2 ** g)}%`;
+
+    const track = document.createElement("div");
+    track.className = "track";
+
+    const bar = document.createElement("div");
+    bar.className = "bar";
+
+    if (g % 2 === 1) bar.style.background = "red";
+
+    track.appendChild(bar);
+    row.appendChild(track);
+    groupContainers[g].appendChild(row);
+
+    bars[n] = bar;
+  }
+}
+
+function triggerOsc(n, g, delay) {
+  const gain = gains[n];
+  const amp = 1 / n;
+  const t = audioContext.currentTime + delay;
+
+  activeByGroup[g].add(n);
+
+  gain.gain.cancelScheduledValues(t);
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(amp, t + 4);
+  gain.gain.linearRampToValueAtTime(0, t + 8);
+
+  setTimeout(() => {
+    soundingByGroup[g].add(n);
+    activatedByGroup[g]++;
+    document.getElementById(`g${g + 1}Activated`).textContent = activatedByGroup[g];
+  }, delay * 1000);
+
+  setTimeout(() => {
+    soundingByGroup[g].delete(n);
+    activeByGroup[g].delete(n);
+  }, (delay + 8) * 1000);
+}
+
+
+/* =========================================================
+   UI UPDATE
+========================================================= */
+function updateUI() {
+  for (let n = 1; n <= 255; n++) {
+    const v = gains[n].gain.value;
+    bars[n].style.width = `${v * 100}%`;
+  }
+
+  for (let g = 0; g < 8; g++) {
+    const el = document.getElementById(`g${g + 1}Active`);
+    if (el) el.textContent = soundingByGroup[g].size;
+  }
+
+  requestAnimationFrame(updateUI);
+}
+
+
+/* =========================================================
+   MAIN CONTROL
+========================================================= */
+document.getElementById("start").onclick = () => {
+  document.getElementById("start").remove();
+
+  initAudio();
+  createOscillators();
+  startCycle();
+  updateUI();
+};
+
+async function startCycle() {
+  while (true) {
+
+    for (let g = 0; g < 8; g++) {
+      activatedByGroup[g] = 0;
+      document.getElementById(`g${g + 1}Activated`).textContent = 0;
+      activeByGroup[g].clear();
+      soundingByGroup[g].clear();
+    }
+
+    const combo = combinations[Math.floor(Math.random() * combinations.length)];
+
+    for (let g = 0; g < 8; g++) {
+      document.getElementById(`g${g + 1}State`).textContent =
+        combo.includes(g) ? "1" : "0";
+    }
+
+    let selected = [];
+
+    combo.forEach(g => {
+      const list = [...groups[g].indices];
+      const k = 1 + Math.floor(Math.random() * list.length);
+      list.sort(() => Math.random() - 0.5);
+      selected.push(...list.slice(0, k).map(n => ({ n, g })));
+    });
+
+    selected.sort(() => Math.random() - 0.5);
+
+    for (const { n, g } of selected) {
+      triggerOsc(n, g, Math.random() < 0.5 ? 0 : Math.floor(Math.random() * 8));
+    }
+
+    await new Promise(r => {
+      const check = () => {
+        const anyActive = activeByGroup.some(set => set.size > 0);
+        if (!anyActive) r();
+        else setTimeout(check, 50);
+      };
+      check();
+    });
+  }
+}
+
+</script>
+
+</body>
+</html>
