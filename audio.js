@@ -18,13 +18,15 @@ import {
 ========================================================= */
 
 export function createOscillators() {
+  if (!audioContext || !masterGain) {
+    throw new Error("AudioContext no inicializado");
+  }
 
   const container = document.getElementById("bars");
 
   const groupContainers = [];
 
   for (let g = 0; g < 8; g++) {
-
     const group = document.createElement("div");
 
     group.style.height = "12.5vh";
@@ -32,7 +34,6 @@ export function createOscillators() {
     group.style.flexDirection = "column";
 
     container.appendChild(group);
-
     groupContainers.push(group);
   }
 
@@ -89,20 +90,19 @@ export function createOscillators() {
 
 export function triggerOsc(n, g, delay = 0) {
 
+  if (!audioContext) return;
+
   const gain = gains[n];
+  if (!gain) return;
 
   const amp = 1 / n;
-
   const t = audioContext.currentTime + delay;
 
   activeByGroup[g].add(n);
 
   gain.gain.cancelScheduledValues(t);
-
   gain.gain.setValueAtTime(0, t);
-
   gain.gain.linearRampToValueAtTime(amp, t + 4);
-
   gain.gain.linearRampToValueAtTime(0, t + 8);
 
   /* ===== empieza a sonar ===== */
@@ -113,12 +113,8 @@ export function triggerOsc(n, g, delay = 0) {
 
     activatedByGroup[g]++;
 
-    const el =
-      document.getElementById(`g${g + 1}Activated`);
-
-    if (el) {
-      el.textContent = activatedByGroup[g];
-    }
+    const el = document.getElementById(`g${g + 1}Activated`);
+    if (el) el.textContent = activatedByGroup[g];
 
   }, delay * 1000);
 
@@ -127,7 +123,6 @@ export function triggerOsc(n, g, delay = 0) {
   setTimeout(() => {
 
     soundingByGroup[g].delete(n);
-
     activeByGroup[g].delete(n);
 
   }, (delay + 8) * 1000);
