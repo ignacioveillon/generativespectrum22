@@ -82,217 +82,91 @@ html, body {
      UI: INFO GRID
 ========================================================= -->
 <div id="infoGrid">
-  <!-- (igual que tu código original, omitido por brevedad) -->
+
+<!-- ENCABEZADO -->
+ <div class="label"> </div>
+<div class="label">Grupo Activo:</div>
+<div class="label">Osc. Programados:</div>
+<div class="label">Osc. Activos:</div>
+<div class="label">Iniciados:</div>
+<div class="label"></div> <!-- NUEVA columna 6 -->
+
+<!-- FILA G1 -->
+<div class="value">G1</div>
+<div class="value" id="g1State">—</div>
+<div class="value" id="g1Count"></div>
+<div class="value" id="g1Active">0</div>
+<div class="value" id="g1Activated">0</div>
+<div class="value"></div> <!-- NUEVA columna 6 -->
+
+
+<!-- FILA G2 -->
+<div class="value">G2</div>
+<div class="value" id="g2State"></div>
+    <div class="value" id="g2Count"></div>
+    <div class="value" id="g2Active">0</div>
+    <div class="value" id="g2Activated">0</div>
+    <div class="value"></div>
+
+<!-- FILA G3 -->
+<div class="value">G3</div>
+<div class="value" id="g3State"></div>
+    <div class="value" id="g3Count"></div>
+    <div class="value" id="g3Active">0</div>
+    <div class="value" id="g3Activated">0</div>
+    <div class="value"></div>
+
+<!-- FILA G4 -->
+<div class="value">G4</div>
+<div class="value" id="g4State"></div>
+    <div class="value" id="g4Count"></div>
+    <div class="value" id="g4Active">0</div>
+<div class="value" id="g4Activated">0</div>
+<div class="value"></div>
+
+<!-- FILA G5 -->
+<div class="value">G5</div>
+<div class="value" id="g5State"></div>
+    <div class="value" id="g5Count"></div>
+<div class="value" id="g5Active">0</div>
+    <div class="value" id="g5Activated">0</div>
+    <div class="value"></div>
+
+<!-- FILA G6 -->
+<div class="value">G6</div>
+<div class="value" id="g6State"></div>
+    <div class="value" id="g6Count"></div>
+    <div class="value" id="g6Active">0</div>
+    <div class="value" id="g6Activated">0</div>
+    <div class="value"></div>
+
+<!-- FILA G7 -->
+<div class="value">G7</div>
+<div class="value" id="g7State"></div>
+    <div class="value" id="g7Count"></div>
+    <div class="value" id="g7Active">0</div>
+    <div class="value" id="g7Activated">0</div>
+    <div class="value"></div>
+
+<!-- FILA G8 -->
+<div class="value">G8</div>
+<div class="value" id="g8State"></div>
+    <div class="value" id="g8Count"></div>
+    <div class="value" id="g8Active">0</div>
+    <div class="value" id="g8Activated">0</div>
+    <div class="value"></div>
+
+
+
 </div>
+
 
 <!-- =========================================================
      UI: BARS CONTAINER
 ========================================================= -->
 <div id="bars"></div>
 
-<script>
-
-/* =========================================================
-   STATE (datos globales)
-========================================================= */
-let audioContext;
-let masterGain;
-
-const FUNDAMENTAL = 32.703;
-
-const gains = [];
-const bars = [];
-
-const activeByGroup = Array.from({ length: 8 }, () => new Set());
-const soundingByGroup = Array.from({ length: 8 }, () => new Set());
-const activatedByGroup = Array(8).fill(0);
-
-
-/* =========================================================
-   MODEL (grupos + combinaciones)
-========================================================= */
-let cursor = 1;
-const groups = [];
-
-for (let i = 0; i < 8; i++) {
-  const size = 2 ** i;
-  groups.push({
-    index: i,
-    indices: Array.from({ length: size }, (_, k) => cursor + k)
-  });
-  cursor += size;
-}
-
-const combinations = [];
-
-for (let mask = 1; mask < 256; mask++) {
-  const combo = [];
-  for (let i = 0; i < 8; i++) {
-    if (mask & (1 << i)) combo.push(i);
-  }
-  combinations.push(combo);
-}
-
-
-/* =========================================================
-   AUDIO ENGINE
-========================================================= */
-function initAudio() {
-  audioContext = new AudioContext();
-  audioContext.resume();
-
-  masterGain = audioContext.createGain();
-  masterGain.gain.value = 0.25;
-  masterGain.connect(audioContext.destination);
-}
-
-function createOscillators() {
-  const container = document.getElementById("bars");
-
-  const groupContainers = [];
-  for (let g = 0; g < 8; g++) {
-    const group = document.createElement("div");
-    group.style.height = "12.5vh";
-    group.style.display = "flex";
-    group.style.flexDirection = "column";
-    container.appendChild(group);
-    groupContainers.push(group);
-  }
-
-  for (let n = 1; n <= 255; n++) {
-    const osc = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    const g = Math.floor(Math.log2(n));
-
-    osc.type = "sine";
-    osc.frequency.value = FUNDAMENTAL * n;
-    gain.gain.value = 0;
-
-    osc.connect(gain);
-    gain.connect(masterGain);
-    osc.start();
-
-    gains[n] = gain;
-
-    const row = document.createElement("div");
-    row.className = "row";
-    row.style.height = `${100 / (2 ** g)}%`;
-
-    const track = document.createElement("div");
-    track.className = "track";
-
-    const bar = document.createElement("div");
-    bar.className = "bar";
-
-    if (g % 2 === 1) bar.style.background = "red";
-
-    track.appendChild(bar);
-    row.appendChild(track);
-    groupContainers[g].appendChild(row);
-
-    bars[n] = bar;
-  }
-}
-
-function triggerOsc(n, g, delay) {
-  const gain = gains[n];
-  const amp = 1 / n;
-  const t = audioContext.currentTime + delay;
-
-  activeByGroup[g].add(n);
-
-  gain.gain.cancelScheduledValues(t);
-  gain.gain.setValueAtTime(0, t);
-  gain.gain.linearRampToValueAtTime(amp, t + 4);
-  gain.gain.linearRampToValueAtTime(0, t + 8);
-
-  setTimeout(() => {
-    soundingByGroup[g].add(n);
-    activatedByGroup[g]++;
-    document.getElementById(`g${g + 1}Activated`).textContent = activatedByGroup[g];
-  }, delay * 1000);
-
-  setTimeout(() => {
-    soundingByGroup[g].delete(n);
-    activeByGroup[g].delete(n);
-  }, (delay + 8) * 1000);
-}
-
-
-/* =========================================================
-   UI UPDATE
-========================================================= */
-function updateUI() {
-  for (let n = 1; n <= 255; n++) {
-    const v = gains[n].gain.value;
-    bars[n].style.width = `${v * 100}%`;
-  }
-
-  for (let g = 0; g < 8; g++) {
-    const el = document.getElementById(`g${g + 1}Active`);
-    if (el) el.textContent = soundingByGroup[g].size;
-  }
-
-  requestAnimationFrame(updateUI);
-}
-
-
-/* =========================================================
-   MAIN CONTROL
-========================================================= */
-document.getElementById("start").onclick = () => {
-  document.getElementById("start").remove();
-
-  initAudio();
-  createOscillators();
-  startCycle();
-  updateUI();
-};
-
-async function startCycle() {
-  while (true) {
-
-    for (let g = 0; g < 8; g++) {
-      activatedByGroup[g] = 0;
-      document.getElementById(`g${g + 1}Activated`).textContent = 0;
-      activeByGroup[g].clear();
-      soundingByGroup[g].clear();
-    }
-
-    const combo = combinations[Math.floor(Math.random() * combinations.length)];
-
-    for (let g = 0; g < 8; g++) {
-      document.getElementById(`g${g + 1}State`).textContent =
-        combo.includes(g) ? "1" : "0";
-    }
-
-    let selected = [];
-
-    combo.forEach(g => {
-      const list = [...groups[g].indices];
-      const k = 1 + Math.floor(Math.random() * list.length);
-      list.sort(() => Math.random() - 0.5);
-      selected.push(...list.slice(0, k).map(n => ({ n, g })));
-    });
-
-    selected.sort(() => Math.random() - 0.5);
-
-    for (const { n, g } of selected) {
-      triggerOsc(n, g, Math.random() < 0.5 ? 0 : Math.floor(Math.random() * 8));
-    }
-
-    await new Promise(r => {
-      const check = () => {
-        const anyActive = activeByGroup.some(set => set.size > 0);
-        if (!anyActive) r();
-        else setTimeout(check, 50);
-      };
-      check();
-    });
-  }
-}
-
-</script>
+<script type="module" src="./main.js"></script>
 
 </body>
 </html>
